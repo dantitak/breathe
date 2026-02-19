@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breathe</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    margin: 0;
+    font-family: "Comic Sans MS", cursive;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(-45deg, #1e3c72, #2a5298, #0f2027, #203a43);
+    background-size: 400% 400%;
+    animation: gradientMove 15s ease infinite;
+    color: white;
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.screen {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.6s ease;
+}
+
+.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#title {
+    font-size: 12vw;
+    opacity: 0;
+    animation: fadeIn 2s forwards;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+button, select {
+    margin-top: 20px;
+    padding: 14px 30px;
+    font-size: 18px;
+    border-radius: 40px;
+    border: none;
+}
+
+button {
+    cursor: pointer;
+}
+
+/* Circle */
+#circle {
+    width: 220px;
+    height: 220px;
+    background: #7ef9ff;
+    border-radius: 50%;
+    margin: 30px 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 60px;
+    font-weight: bold;
+    transform: scale(0);
+    transition: transform 4s ease-in-out, box-shadow 4s ease-in-out;
+    box-shadow: 0 0 30px rgba(126,249,255,0.6);
+}
+
+.glow {
+    box-shadow: 0 0 60px rgba(126,249,255,0.9);
+}
+
+#phase {
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+#counter, #goal {
+    font-size: 18px;
+}
+
+#mainMenuBtn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- MENU -->
+<div id="menu" class="screen visible">
+    <div id="title">Breathe</div>
+
+    <div style="margin-top:40px;">
+        Goal:
+        <select id="goalSelect">
+            <option>5</option>
+            <option>10</option>
+            <option>15</option>
+            <option>20</option>
+            <option>Infinite</option>
+        </select>
+    </div>
+
+    <button id="startBtn">Start</button>
+</div>
+
+<!-- APP -->
+<div id="app" class="screen hidden">
+
+    <button id="mainMenuBtn">Main Menu</button>
+
+    <div id="counter">Cycles: 0</div>
+    <div id="goal"></div>
+
+    <div id="phase"></div>
+
+    <div id="circle">
+        <div id="countdown"></div>
+    </div>
+
+    <button id="startBreathBtn">Start</button>
+    <button id="stopBreathBtn">Stop</button>
+    <button id="resetBtn">Reset</button>
+</div>
+
+<script>
+let inhale = 4;
+let hold = 7;
+let exhale = 8;
+
+let running = false;
+let cycleCount = 0;
+let targetCycles = null;
+
+const menu = document.getElementById("menu");
+const app = document.getElementById("app");
+const circle = document.getElementById("circle");
+const phaseText = document.getElementById("phase");
+const counter = document.getElementById("counter");
+const goalDisplay = document.getElementById("goal");
+const countdown = document.getElementById("countdown");
+
+const startBtn = document.getElementById("startBtn");
+const startBreathBtn = document.getElementById("startBreathBtn");
+const stopBreathBtn = document.getElementById("stopBreathBtn");
+const resetBtn = document.getElementById("resetBtn");
+const mainMenuBtn = document.getElementById("mainMenuBtn");
+
+function switchScreen(show, hide) {
+    hide.classList.remove("visible");
+    hide.classList.add("hidden");
+
+    setTimeout(() => {
+        show.classList.remove("hidden");
+        show.classList.add("visible");
+    }, 200);
+}
+
+startBtn.addEventListener("click", () => {
+    const selected = document.getElementById("goalSelect").value;
+    targetCycles = selected === "Infinite" ? null : parseInt(selected);
+
+    goalDisplay.innerText = targetCycles ? "Goal: " + targetCycles : "";
+    switchScreen(app, menu);
+});
+
+mainMenuBtn.addEventListener("click", () => {
+    stopBreathing();
+    reset();
+    switchScreen(menu, app);
+});
+
+startBreathBtn.addEventListener("click", startBreathing);
+stopBreathBtn.addEventListener("click", stopBreathing);
+resetBtn.addEventListener("click", reset);
+
+function startBreathing() {
+    if (running) return;
+    running = true;
+    breatheCycle();
+}
+
+function stopBreathing() {
+    running = false;
+}
+
+function reset() {
+    running = false;
+    cycleCount = 0;
+    counter.innerText = "Cycles: 0";
+    circle.style.transform = "scale(0)";
+    countdown.innerText = "";
+    phaseText.innerText = "";
+}
+
+async function breatheCycle() {
+    while (running) {
+
+        circle.style.transition = "none";
+        circle.style.transform = "scale(0)";
+        await sleep(50);
+
+        await phase("Inhale", inhale, 1, true);
+        await phase("Hold", hold, 1, false);
+        await phase("Exhale", exhale, 0, false);
+
+        cycleCount++;
+        counter.innerText = "Cycles: " + cycleCount;
+
+        if (targetCycles !== null) {
+            let remaining = targetCycles - cycleCount;
+            goalDisplay.innerText = "Goal: " + remaining;
+
+            if (remaining <= 0) {
+                phaseText.innerText = "Session Complete ✨";
+                countdown.innerText = "";
+                running = false;
+                break;
+            }
+        }
+    }
+}
+
+async function phase(name, duration, scaleTarget, glowOn) {
+    phaseText.innerText = name;
+
+    circle.style.transition = duration + "s ease-in-out";
+    circle.style.transform = "scale(" + scaleTarget + ")";
+
+    if (glowOn) circle.classList.add("glow");
+    else circle.classList.remove("glow");
+
+    for (let i = duration; i > 0; i--) {
+        countdown.innerText = i;
+        await sleep(1000);
+        if (!running) return;
+    }
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+</script>
+
+</body>
+</html>
