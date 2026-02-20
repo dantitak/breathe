@@ -7,7 +7,6 @@
 
 <style>
 * { box-sizing: border-box; }
-
 body {
     margin: 0;
     font-family: "Comic Sans MS", cursive;
@@ -42,25 +41,18 @@ body {
 .hidden { opacity: 0; pointer-events: none; }
 .visible { opacity: 1; }
 
-#title {
-    font-size: 12vw;
-    opacity: 0;
-    animation: fadeIn 2s forwards;
-}
-
+#title { font-size: 12vw; opacity: 0; animation: fadeIn 2s forwards; }
 @keyframes fadeIn { to { opacity: 1; } }
 
-button, select {
+button, select, input {
     margin-top: 20px;
     padding: 12px 25px;
     font-size: 18px;
     border-radius: 30px;
     border: none;
 }
-
 button { cursor: pointer; }
 
-/* Circle */
 #circle {
     width: 220px;
     height: 220px;
@@ -73,29 +65,33 @@ button { cursor: pointer; }
     font-size: 60px;
     font-weight: bold;
     transform: scale(0);
-    transition: transform 4s ease-in-out;
+    transition: transform 4s ease-in-out, box-shadow 4s ease-in-out;
     box-shadow: 0 0 30px rgba(126,249,255,0.6);
 }
-
 .glow {
-    animation: pulseGlow 2s infinite ease-in-out;
-}
-
-@keyframes pulseGlow {
-    0% { box-shadow: 0 0 30px rgba(126,249,255,0.6); }
-    50% { box-shadow: 0 0 60px rgba(126,249,255,0.9); }
-    100% { box-shadow: 0 0 30px rgba(126,249,255,0.6); }
+    box-shadow: 0 0 60px rgba(126,249,255,0.9);
 }
 
 #phase { font-size: 32px; margin-bottom: 10px; }
 #counter, #goal { font-size: 20px; }
 #mainMenuBtn { position: absolute; top: 20px; left: 20px; }
 
-/* Mobile optimization */
-@media (max-width: 600px) {
-    #circle { width: 150px; height: 150px; font-size: 40px; }
-    #title { font-size: 18vw; }
-    button, select { font-size: 16px; padding: 10px 20px; }
+#settingsModal {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.85);
+    padding: 30px;
+    border-radius: 20px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+}
+
+#settingsModal input {
+    margin: 10px 0;
+    width: 100px;
+    text-align: center;
 }
 </style>
 </head>
@@ -118,16 +114,24 @@ button { cursor: pointer; }
     </div>
 
     <button onclick="startApp()">Start</button>
+    <button onclick="openSettings()">Settings</button>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settingsModal">
+    <h2>Adjust Times (seconds)</h2>
+    Inhale: <input type="number" id="inhaleInput" min="1" value="4"><br>
+    Hold: <input type="number" id="holdInput" min="1" value="7"><br>
+    Exhale: <input type="number" id="exhaleInput" min="1" value="8"><br>
+    <button onclick="saveSettings()">Save</button>
 </div>
 
 <!-- APP SCREEN -->
 <div id="app" class="screen hidden">
-
     <button id="mainMenuBtn" onclick="goToMenu()">Main Menu</button>
 
     <div id="counter">Cycles: 0</div>
     <div id="goal"></div>
-
     <div id="phase"></div>
 
     <div id="circle">
@@ -155,10 +159,14 @@ const counter = document.getElementById("counter");
 const goalDisplay = document.getElementById("goal");
 const countdown = document.getElementById("countdown");
 
+const settingsModal = document.getElementById("settingsModal");
+const inhaleInput = document.getElementById("inhaleInput");
+const holdInput = document.getElementById("holdInput");
+const exhaleInput = document.getElementById("exhaleInput");
+
 function fadeTo(show, hide) {
     hide.classList.remove("visible");
     hide.classList.add("hidden");
-
     setTimeout(() => {
         show.classList.remove("hidden");
         show.classList.add("visible");
@@ -169,7 +177,8 @@ function startApp() {
     const selected = document.getElementById("goalSelect").value;
     targetCycles = selected === "Infinite" ? null : parseInt(selected);
 
-    goalDisplay.innerText = targetCycles !== null ? "Goal: " + targetCycles : "";
+    if (targetCycles !== null) goalDisplay.innerText = "Goal: " + targetCycles;
+    else goalDisplay.innerText = "";
 
     fadeTo(app, menu);
 }
@@ -177,6 +186,17 @@ function startApp() {
 function goToMenu() {
     reset();
     fadeTo(menu, app);
+}
+
+function openSettings() {
+    settingsModal.style.display = "flex";
+}
+
+function saveSettings() {
+    inhale = parseInt(inhaleInput.value) || 4;
+    hold = parseInt(holdInput.value) || 7;
+    exhale = parseInt(exhaleInput.value) || 8;
+    settingsModal.style.display = "none";
 }
 
 function startBreathing() {
@@ -193,27 +213,18 @@ function reset() {
     countdown.innerText = "";
     phaseText.innerText = "";
     goalDisplay.innerText = targetCycles !== null ? "Goal: " + targetCycles : "";
-    circle.classList.remove("glow");
 }
 
 async function breatheCycle() {
     while (running) {
-
-        // Start each cycle invisible
+        // Inhale
         circle.style.transition = "none";
         circle.style.transform = "scale(0)";
-        circle.classList.remove("glow");
         await sleep(50);
-        if (!running) break;
 
-        await phase("Inhale", inhale, 1, true);
-        if (!running) break;
-
-        await phase("Hold", hold, 1, true);
-        if (!running) break;
-
-        await phase("Exhale", exhale, 0, false);
-        if (!running) break;
+        await phase("Inhale", inhale, 1);
+        await phase("Hold", hold, 1);
+        await phase("Exhale", exhale, 0);
 
         cycleCount++;
         counter.innerText = "Cycles: " + cycleCount;
@@ -221,36 +232,35 @@ async function breatheCycle() {
         if (targetCycles !== null) {
             let remaining = targetCycles - cycleCount;
             goalDisplay.innerText = "Goal: " + remaining;
-
             if (remaining <= 0) {
                 phaseText.innerText = "Session Complete ✨";
                 countdown.innerText = "";
                 running = false;
-                circle.classList.remove("glow");
                 break;
             }
         }
     }
 }
 
-async function phase(name, duration, scaleTarget, glowOn) {
+async function phase(name, duration, scaleTarget) {
     phaseText.innerText = name;
+
+    // pulsing glow effect
+    if (scaleTarget === 1) circle.classList.add("glow");
+    else circle.classList.remove("glow");
 
     circle.style.transition = duration + "s ease-in-out";
     circle.style.transform = "scale(" + scaleTarget + ")";
-    if (glowOn) circle.classList.add("glow");
-    else circle.classList.remove("glow");
 
     for (let i = duration; i > 0; i--) {
-        if (!running) { countdown.innerText = ""; circle.classList.remove("glow"); return; }
         countdown.innerText = i;
         await sleep(1000);
+        if (!running) return;
     }
+    countdown.innerText = "";
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 </script>
 
 </body>
